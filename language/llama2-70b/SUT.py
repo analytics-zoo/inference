@@ -120,7 +120,7 @@ class SUT():
         self.qsl = lg.ConstructQSL(self.data_object.total_sample_count, self.data_object.perf_count,
                                    self.data_object.LoadSamplesToRam, self.data_object.UnloadSamplesFromRam)
 
-        self.load_model(model_name)
+        self.load_model(self.model_name)
 
         self.num_workers = workers
         self.worker_threads = [None] * self.num_workers
