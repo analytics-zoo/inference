@@ -91,7 +91,7 @@ class SUT():
                  workers=1):
 
         self.model = model
-        #self.model_path = model_path or "meta-llama/Llama-2-70b-chat-hf"
+        self.model_name = "meta-llama/Llama-2-70b-chat-hf"
         self.device = device
 
         if not batch_size:
@@ -120,7 +120,7 @@ class SUT():
         self.qsl = lg.ConstructQSL(self.data_object.total_sample_count, self.data_object.perf_count,
                                    self.data_object.LoadSamplesToRam, self.data_object.UnloadSamplesFromRam)
 
-        self.load_model()
+        self.load_model(model_name)
 
         self.num_workers = workers
         self.worker_threads = [None] * self.num_workers
@@ -230,9 +230,9 @@ class SUT():
                     print(f"\tLoaded from cache: {_p}")
 
 
-    def load_model(self):
+    def load_model(self, model_name):
         print("Loaded model")
-        self.tokenizer = AutoTokenizer.from_pretrained("/mnt/disk1/llm-models/Llama-2-7b-chat-gptq")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         print("Loaded tokenizer")
 
