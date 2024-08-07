@@ -1,10 +1,20 @@
+import intel_extension_for_pytorch as ipex
+
 import subprocess
 import mlperf_loadgen as lg
 import argparse
 import os
 import logging
 import sys
+
+import torch
 from SUT import SUT, SUTServer
+from dataset import Dataset
+
+from ipex_llm.transformers import AutoModelForCausalLM
+import transformers
+from torch.nn.functional import pad
+from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.getcwd())
 
@@ -18,12 +28,11 @@ def get_args():
     parser.add_argument("--dataset-path", type=str, default=None, help="")
     parser.add_argument("--accuracy", action="store_true", help="Run accuracy mode")
     parser.add_argument("--dtype", type=str, default="float32", help="data type of the model, choose from float16, bfloat16 and float32")
-    parser.add_argument("--device", type=str,  choices=["cpu", "cuda:0"], default="cpu", help="device to use")
+    parser.add_argument("--device", type=str,  choices=["cpu", "cuda:0", "xpu"], default="cpu", help="device to use")
     parser.add_argument("--audit-conf", type=str, default="audit.conf", help="audit config for LoadGen settings during compliance runs")
     parser.add_argument("--mlperf-conf", type=str, default="mlperf.conf", help="mlperf rules config")
     parser.add_argument("--user-conf", type=str, default="user.conf", help="user config for user LoadGen settings such as target QPS")
     parser.add_argument("--total-sample-count", type=int, default=24576, help="Number of samples to use in benchmark.") # TODO: This interpretation of 'total-sample-count' is a little misleading. Fix it
-    parser.add_argument("--batch-size", type=int, default=1, help="Model batch-size to use in benchmark.")
     parser.add_argument("--output-log-dir", type=str, default="output-logs", help="Where logs are saved")
     parser.add_argument("--enable-log-trace", action="store_true", help="Enable log tracing. This file can become quite large")
     parser.add_argument("--num-workers", type=int, default=1, help="Number of workers to process queries")
@@ -42,6 +51,21 @@ sut_map = {
         "server": SUTServer
         }
 
+args = get_args()
+
+model = AutoModelForCausalLM.from_pretrained(
+    args.model_path,
+    optimize_model=True,
+    load_in_4bit=True,
+    trust_remote_code=True,
+    use_cache=True,)
+
+
+data_object = Dataset(args.model_path,
+                      dataset_path=args.dataset_path,
+                      total_sample_count=args.total_sample_count,
+                      device="xpu")
+
 def main():
     args = get_args()
 
@@ -53,6 +77,7 @@ def main():
 
     if args.accuracy:
         settings.mode = lg.TestMode.AccuracyOnly
+        log.warning("Accuracy run will generate the accuracy logs, but the evaluation of the log is not completed yet")
     else:
         settings.mode = lg.TestMode.PerformanceOnly
 
@@ -66,10 +91,11 @@ def main():
 
     sut_cls = sut_map[args.scenario.lower()]
 
+
     sut = sut_cls(
-        model_path=args.model_path,
+        model=model,
+        data_object=data_object,
         dtype=args.dtype,
-        batch_size=args.batch_size,
         dataset_path=args.dataset_path,
         total_sample_count=args.total_sample_count,
         device=args.device,

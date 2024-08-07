@@ -1,9 +1,10 @@
 import os
 import time
 import numpy as np
+#import intel_extension_for_pytorch as ipex
 import torch
 from datasets import load_dataset, load_from_disk
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoTokenizer
 from torch.nn.functional import pad
 from torch.utils.data import DataLoader
 from typing import Optional, Dict, Sequence
@@ -20,12 +21,12 @@ import random
 
 class Dataset():
     def __init__(self, model_name=None, total_sample_count=24576, perf_count_override=None, dataset_path=None, device="cpu"):
-        self.model_name = model_name or "meta-llama/Llama-2-70b-chat-hf"
         self.dataset_path = dataset_path
         self.max_length = 1024
         self.device = device
+        self.model_name = model_name
 
-        #self.total_sample_count = total_sample_count
+        self.total_sample_count = total_sample_count
 
         self.load_tokenizer()
         self.load_processed_dataset()
@@ -35,11 +36,7 @@ class Dataset():
 
     def load_tokenizer(self):
         """ Returns tokenizer """
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name,
-            model_max_length=1024,
-            padding_side="left",
-            use_fast=False,)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
@@ -58,11 +55,12 @@ class Dataset():
         self.attention_masks = []
 
         for ids in input_tokens:
-            input_ids = torch.tensor(ids, dtype=torch.int32).view(1,-1).to(self.device)
+            input_ids = torch.tensor(ids, dtype=torch.int32).view(1,-1).to("xpu")
             attn_mask = torch.ones_like(input_ids)
             self.input_ids.append(input_ids)
             self.attention_masks.append(attn_mask)
             self.input_lens.append(input_ids.shape[-1])
+        
         print("Finished loading dataset.")
 
 
