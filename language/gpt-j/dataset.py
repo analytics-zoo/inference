@@ -3,7 +3,7 @@ import time
 import numpy as np
 import torch
 from datasets import load_dataset, load_from_disk
-from tokenizer_GPTJ import get_transformer_autotokenizer
+from transformers import AutoModelForCausalLM, LlamaTokenizer, AutoTokenizer
 from torch.nn.functional import pad
 from torch.utils.data import DataLoader
 from typing import Optional, Dict, Sequence
@@ -30,13 +30,13 @@ class Dataset():
         print("Constructing QSL")
 
         self.dataset = "cnn_dailymail"
-        self.model_name = "EleutherAI/gpt-j-6B"
+        self.model_name = "/mnt/disk1/llm-models/Llama-2-7b-chat-hf"
         self.dataset_path = dataset_path
         self.batch_size = batch_size
         self.pad_val = pad_val
         self.pad_max = pad_max
 
-        self.tokenizer = get_transformer_autotokenizer(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.list_data_dict = utils.jload(self.dataset_path)
@@ -61,9 +61,7 @@ class Dataset():
         source_encoded_attn_masks = []
 
         for i in range(total_samples):
-            source_encoded = self.tokenizer(self.sources[i], return_tensors="pt",
-                                            padding=True, truncation=True,
-                                            max_length=1919)
+            source_encoded = self.tokenizer(self.sources[i], return_tensors="pt")
             source_encoded_input_ids.append(source_encoded.input_ids)
             source_encoded_attn_masks.append(source_encoded.attention_mask)
 
