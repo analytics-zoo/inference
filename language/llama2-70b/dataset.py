@@ -24,6 +24,7 @@ class Dataset():
         self.dataset_path = dataset_path
         self.max_length = 1024
         self.device = device
+        self.model_name = model_name
 
         self.total_sample_count = total_sample_count
 
@@ -35,7 +36,7 @@ class Dataset():
 
     def load_tokenizer(self):
         """ Returns tokenizer """
-        self.tokenizer = AutoTokenizer.from_pretrained("/mnt/disk1/llm-models/Llama-2-7b-chat-gptq")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
 
         self.tokenizer.pad_token = self.tokenizer.eos_token
 

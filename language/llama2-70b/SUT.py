@@ -5,7 +5,9 @@ import array
 import torch
 from torch.nn.functional import pad
 from torch.utils.data import DataLoader
-from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaForCausalLM
+from transformers import AutoTokenizer
+from ipex_llm.transformers import AutoModelForCausalLM
+import intel_extension_for_pytorch as ipex
 from transformers.generation.streamers import BaseStreamer
 
 import pickle
@@ -25,13 +27,12 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("Llama-70B-SUT")
 
 gen_kwargs = {
-    "early_stopping": True,
-    "max_new_tokens": 1024,
+    "early_stopping": False,
+    "max_new_tokens": 128,
     "min_new_tokens": 1,
     "num_beams": 1,
     "do_sample": False
 }
-
 
 
 class FirstTokenStreamer(BaseStreamer):
@@ -79,7 +80,8 @@ class FirstTokenStreamer(BaseStreamer):
 
 class SUT():
     def __init__(self,
-                 model_path=None,
+                 model=None,
+                 data_object=None,
                  dtype="bfloat16",
                  device="cpu",
                  batch_size=None,
@@ -88,14 +90,15 @@ class SUT():
                  use_cached_outputs=False,  # Set this to True *only for test accuracy runs* in case your prior session was killed partway through
                  workers=1):
 
-        self.model_path = model_path or "meta-llama/Llama-2-70b-chat-hf"
+        self.model = model
+        #self.model_path = model_path or "meta-llama/Llama-2-70b-chat-hf"
         self.device = device
 
         if not batch_size:
             if device == "cpu":
                 batch_size = 1
             else:
-                batch_size = 32  # Reduce to 8 if using 4 GPUs, 16 for 8.
+                batch_size = 2  # Reduce to 8 if using 4 GPUs, 16 for 8.
         self.batch_size = batch_size
 
         # dtype
@@ -112,11 +115,8 @@ class SUT():
         if 'cuda' in self.device:
             assert torch.cuda.is_available(), "torch gpu is not available, exiting..."
 
-        self.dataset_path = dataset_path
-        self.data_object = Dataset(self.model_path,
-                                   dataset_path=self.dataset_path,
-                                   total_sample_count=total_sample_count,
-                                   device=self.device)
+        self.data_object = data_object
+
         self.qsl = lg.ConstructQSL(self.data_object.total_sample_count, self.data_object.perf_count,
                                    self.data_object.LoadSamplesToRam, self.data_object.UnloadSamplesFromRam)
 
@@ -185,6 +185,7 @@ class SUT():
                                                   (max_seq_len - self.data_object.input_lens[q.index], 0, 0, 0),
                                                  value=0))
                     input_len.append(self.data_object.input_lens[q.index])
+
                 input_ids_tensor = torch.cat(input_ids_tensor)
                 input_masks_tensor = torch.cat(input_masks_tensor)
 
@@ -199,6 +200,8 @@ class SUT():
                     pad_token_id=self.tokenizer.pad_token_id,
                     **gen_kwargs
                 )
+
+                pred_output_tokens = pred_output_tokens#.to("cpu")
 
                 tik3 = time.time()
 
@@ -228,27 +231,8 @@ class SUT():
 
 
     def load_model(self):
-        self.model = LlamaForCausalLM.from_pretrained(
-            self.model_path,
-            device_map="auto",
-            low_cpu_mem_usage=True,
-            torch_dtype=self.amp_dtype
-        )
         print("Loaded model")
-
-        self.device = torch.device(self.device)
-        if self.device == "cpu":
-            self.model = self.model.to(self.device)  # Force CPU if your system has GPU and you specifically want CPU-only run
-
-        self.model.eval()
-        self.model = self.model.to(memory_format=torch.channels_last)
-
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path,
-            model_max_length=1024,
-            padding_side="left",
-            use_fast=False,)
-
+        self.tokenizer = AutoTokenizer.from_pretrained("/mnt/disk1/llm-models/Llama-2-7b-chat-gptq")
         self.tokenizer.pad_token = self.tokenizer.eos_token
         print("Loaded tokenizer")
 
