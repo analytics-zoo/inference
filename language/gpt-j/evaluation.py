@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 import evaluate
 import argparse
 import nltk
+import datasets
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -23,7 +24,7 @@ def get_args():
                         help="path to cnn_eval.json")
     parser.add_argument("--verbose", action="store_true",
                         help="verbose messages")
-    parser.add_argument("--dtype", default="int64",
+    parser.add_argument("--dtype", default="int32",
                         help="dtype of the accuracy log", choices=["int32", "int64"])
     args = parser.parse_args()
     return args
@@ -43,16 +44,15 @@ def postprocess_text(preds, targets):
 def main():
 
     args = get_args()
-    model_name = "EleutherAI/gpt-j-6B"
+    model_name = "/mnt/disk1/llm-models/Llama-2-7b-chat-hf"
     dataset_path = args.dataset_file
-    metric = evaluate.load("rouge")
+    metric = datasets.load_metric("rouge")
     nltk.download('punkt')
 
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        model_max_length=2048,
-        padding_side="left",
-        use_fast=False,)
+        model_name)
+        # padding_side="left",
+        # use_fast=False,)
     tokenizer.pad_token = tokenizer.eos_token
 
     data_object = Dataset(dataset_path)
@@ -88,6 +88,7 @@ def main():
 
     preds_decoded_text = tokenizer.batch_decode(
         preds_token_ids, skip_special_tokens=True)
+
 
     preds, targets = postprocess_text(preds_decoded_text, target_required)
 
